@@ -34,14 +34,15 @@ Public Class Pools_JSON
     Public Property url As String
     Public Property user As String
     Public Property pass As String
+    Public Property checked As Boolean
 
 End Class
 
 Public Class AMD_Miner_Settings_JSON
 
-    Public Property pools As New List(Of Pools_JSON)
+    Public Property pools As New List(Of AMD_Pools_JSON)
     Public Property algorithm As String
-    Public Property intensity As Decimal
+    Public Property intensity As String
     Public Property device As String
 
 End Class
@@ -50,16 +51,24 @@ Public Class AMD_Pools_JSON
 
     Public Property url As String
     Public Property user As String
-    Public Property userpass As String
+    Public Property pass As String
 
 End Class
 
 Public Class NVIDIA_Miner_Settings_JSON
 
-    Public Property pools As New List(Of Pools_JSON)
+    Public Property pools As New List(Of NVIDIA_Pools_JSON)
     Public Property algo As String
     Public Property intensity As Decimal
     Public Property devices As String
+
+End Class
+
+Public Class NVIDIA_Pools_JSON
+
+    Public Property url As String
+    Public Property user As String
+    Public Property pass As String
 
 End Class
 

@@ -21,8 +21,6 @@ Module variables
     Public Property p2poolfolder As String
     Public Property scannerfolder As String
     Public Property command As String
-    Public Property newlog As String
-    Public Property logfilestring As String
     Public Property platform As Boolean 'true=64-bit false=32-bit
     Public Property otherminer As Boolean
     Public Property otherp2pool As Boolean
@@ -64,9 +62,9 @@ Module variables
     Public Property show_cli As Boolean
     Public Property autostart_miner As String
     Public Property p2pool_network As String = 1
-    Public Property p2pool_node_fee As Integer = 0
+    Public Property p2pool_node_fee As Decimal = 0
     Public Property p2pool_fee_address As String = "VpBsRnN749jYHE9hT8dZreznHfmFMdE1yG"
-    Public Property p2pool_donation As Integer = 1
+    Public Property p2pool_donation As Decimal = 1
     Public Property max_connections As Integer = 50
 
     'P2Pool Variables
@@ -115,5 +113,6 @@ Module variables
     Public Property pools As New ArrayList()
     Public Property workers As New ArrayList()
     Public Property passwords As New ArrayList()
+    Public Property selected As New ArrayList()
 
 End Module

@@ -3,24 +3,21 @@ Imports System.IO
 Imports System.Web.Script.Serialization
 Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
+Imports VertcoinOneClickMiner.Core
 
 Public Class settings
-
+    Private ReadOnly _logger As ILogger
     Dim JSONConverter As JavaScriptSerializer = New JavaScriptSerializer()
+
+    Public Sub New(logger As ILogger)
+        InitializeComponent()
+        _logger = logger
+    End Sub
 
     Private Sub settings_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
         Try
             Invoke(New MethodInvoker(AddressOf Style))
-            Node_Fee.Text = p2pool_node_fee & "%"
-            Node_Donation.Text = p2pool_donation & "%"
-            TextBox3.Text = max_connections
-            TextBox4.Text = p2pool_port
-            TextBox5.Text = mining_port
-            Intensity_Text.Text = mining_intensity
-            Devices_Text.Text = devices
-            Fee_Address_Text.Text = p2pool_fee_address
-            ComboBox1.SelectedItem = p2pool_network
             If keep_miner_alive = True Then
                 CheckBox6.Checked = True
             Else
@@ -76,13 +73,20 @@ Public Class settings
                     mining_port = "9181"
                 End If
             End If
+            Node_Fee.Text = p2pool_node_fee & "%"
+            Node_Donation.Text = p2pool_donation & "%"
+            TextBox3.Text = max_connections
+            TextBox4.Text = p2pool_port
+            TextBox5.Text = mining_port
+            Intensity_Text.Text = mining_intensity
+            Devices_Text.Text = devices
+            Fee_Address_Text.Text = p2pool_fee_address
+            ComboBox1.SelectedItem = p2pool_network
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Settings(), " & ex.Message)
+            _logger.LogError(ex)
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Settings() Loaded: OK.")
+            _logger.Trace("Loaded: OK.")
         End Try
 
     End Sub
@@ -99,10 +103,10 @@ Public Class settings
                 devices = Devices_Text.Text
             End If
             If Not Node_Fee.Text = "" Then
-                p2pool_node_fee = Convert.ToInt32(Node_Fee.Text.Replace("%", ""))
+                p2pool_node_fee = Convert.ToDecimal(Node_Fee.Text.Replace("%", ""))
             End If
             If Not Node_Donation.Text = "" Then
-                p2pool_donation = Convert.ToInt32(Node_Donation.Text.Replace("%", ""))
+                p2pool_donation = Convert.ToDecimal(Node_Donation.Text.Replace("%", ""))
             End If
             If Not TextBox3.Text = "" Then
                 max_connections = TextBox3.Text
@@ -169,11 +173,9 @@ Public Class settings
             Invoke(New MethodInvoker(AddressOf Main.StartWithWindows))
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Settings(), " & ex.Message)
+            _logger.LogError(ex)
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Settings() Closed: OK.")
+            _logger.Trace("Closed: OK.")
         End Try
 
     End Sub
@@ -238,11 +240,9 @@ Public Class settings
             Dim jsonFormatted As String = JValue.Parse(jsonstring).ToString(Formatting.Indented)
             File.WriteAllText(settingsfile, jsonFormatted)
         Catch ex As IOException
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() SaveSettings: " & ex.Message)
+            _logger.LogError(ex)
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() SaveSettings: OK.")
+            _logger.Trace("Main() SaveSettings: OK.")
             MsgBox("Settings set back to defaults.")
             Invoke(New MethodInvoker(AddressOf Main.LoadSettingsJSON))
             Invoke(New MethodInvoker(AddressOf Main.Update_Pool_Info))
@@ -288,6 +288,26 @@ Public Class settings
     Private Sub PictureBox14_Click(sender As Object, e As EventArgs) Handles PictureBox14.Click
 
         Me.WindowState = FormWindowState.Minimized
+
+    End Sub
+
+    Private Sub ComboBox1_SelectedIndexChanged(sender As Object, e As EventArgs) Handles ComboBox1.SelectedIndexChanged
+
+        If ComboBox1.SelectedItem = 1 Then
+            If TextBox4.Text = "9347" Or TextBox4.Text = "" Then
+                TextBox4.Text = "9346"
+            End If
+            If TextBox5.Text = "9181" Or TextBox5.Text = "" Then
+                TextBox5.Text = "9171"
+            End If
+        ElseIf ComboBox1.SelectedItem = 2 Then
+            If TextBox4.Text = "9346" Or TextBox4.Text = "" Then
+                TextBox4.Text = "9347"
+            End If
+            If TextBox5.Text = "9171" Or TextBox5.Text = "" Then
+                TextBox5.Text = "9181"
+            End If
+        End If
 
     End Sub
 

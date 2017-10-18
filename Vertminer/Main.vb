@@ -10,10 +10,12 @@ Imports System.Web.Script.Serialization
 Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
 Imports System.Globalization
+Imports VertcoinOneClickMiner.Core
 
 Public Class Main
 
     Dim JSONConverter As JavaScriptSerializer = New JavaScriptSerializer()
+    Private _logger as ILogger
 
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
@@ -33,6 +35,9 @@ Public Class Main
             amdfolder = settingsfolder & "\amd"
             nvidiafolder = settingsfolder & "\nvidia"
             cpufolder = settingsfolder & "\cpu"
+
+            _logger = New FileLogger(syslog)
+
             If System.IO.Directory.Exists(settingsfolder) = False Then
                 System.IO.Directory.CreateDirectory(settingsfolder)
             End If
@@ -62,8 +67,6 @@ Public Class Main
             Else
                 Me.WindowState = FormWindowState.Normal
             End If
-            'Copies previous log file to string
-            logfilestring = File.ReadAllText(syslog)
             'Check if p2pool or miner are already running
             Invoke(New MethodInvoker(AddressOf Process_Check))
             If p2pool_detected = True Then
@@ -79,7 +82,7 @@ Public Class Main
                     mining_initialized = True
                     BeginInvoke(New MethodInvoker(AddressOf Start_Miner))
                 ElseIf default_miner = "nvidia" Then
-                    If System.IO.File.Exists(nvidiafolder & "\ocm_ccminer.exe") = True Then
+                    If System.IO.File.Exists(nvidiafolder & "\ocm_vertminer.exe") = True Then
                         nvidiaminer = True
                     End If
                     mining_initialized = True
@@ -105,11 +108,9 @@ Public Class Main
             Uptime_Timer.Start()
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main(), " & ex.Message)
+            _logger.LogError(ex)
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Loaded: OK, V:" & Application.ProductVersion)
+            _logger.Trace("Loaded: OK, V:" & Application.ProductVersion)
         End Try
 
     End Sub
@@ -149,12 +150,9 @@ Public Class Main
 
     Private Sub Main_Closing(sender As Object, e As System.ComponentModel.CancelEventArgs) Handles MyBase.Closing
 
-        newlog = newlog & Environment.NewLine
-        newlog = newlog & ("- " & timenow & ", " & "Main(), Closed: OK")
-        newlog = newlog & Environment.NewLine
-        newlog = newlog & ("================================================================================")
-        File.WriteAllText(syslog, newlog)
-        File.AppendAllText(syslog, logfilestring)
+        _logger.Trace(Environment.NewLine)
+        _logger.Trace("Closing: OK")
+
         NotifyIcon1.Dispose()
         If ComboBox1.SelectedItem = "AMD" Then
             default_miner = "amd"
@@ -166,6 +164,8 @@ Public Class Main
         Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Invoke(New MethodInvoker(AddressOf Kill_Miner))
         Invoke(New MethodInvoker(AddressOf Kill_P2Pool))
+
+        _logger.Trace("================================================================================")
         Application.Exit()
 
     End Sub
@@ -189,7 +189,7 @@ Public Class Main
             End If
         Next
         For Each p As Process In System.Diagnostics.Process.GetProcesses
-            If p.ProcessName.Contains("ocm_ccminer") Then
+            If p.ProcessName.Contains("ocm_vertminer") Then
                 nvidia_detected = True
                 Exit For
             Else
@@ -213,7 +213,7 @@ Public Class Main
             End If
         Next
         For Each p As Process In System.Diagnostics.Process.GetProcesses
-            If p.ProcessName = ("ccminer") Or p.ProcessName = ("sgminer") Or p.ProcessName = ("cpuminer") And Not p.ProcessName.Contains("ocm") Then
+            If p.ProcessName = ("vertminer") Or p.ProcessName = ("sgminer") Or p.ProcessName = ("cpuminer") And Not p.ProcessName.Contains("ocm") Then
                 otherminer = True
                 Exit For
             Else
@@ -277,15 +277,12 @@ Public Class Main
             'Dim device = discoverer.DiscoverDeviceAsync(Open.Nat.PortMapper.Upnp, cts)
             'device.CreatePortMapAsync(New Open.Nat.Mapping(Open.Nat.Protocol.Tcp, 1600, 1700, "The mapping name"))
 
+            _logger.Trace("SET OK. Ports set: " & mining_port & "," & p2pool_port)
 
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() UPnP: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
-        Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() UPnP: SET OK. Ports set: " & mining_port & "," & p2pool_port)
         End Try
 
     End Sub
@@ -325,7 +322,7 @@ Public Class Main
                         System.Threading.Thread.Sleep(100)
                         System.IO.Directory.CreateDirectory(nvidiafolder)
                     End If
-                    downloadclient.DownloadFileAsync(New Uri(updatelink), settingsfolder & "\nvidia\ccminer.zip", True)
+                    downloadclient.DownloadFileAsync(New Uri(updatelink), settingsfolder & "\nvidia\vertminer.zip", True)
                 Else
                     progress.Close()
                 End If
@@ -348,12 +345,10 @@ Public Class Main
             End If
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Download_Miner: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Download_Miner: Downloaded OK.")
+            _logger.Trace("Downloaded OK.")
         End Try
 
     End Sub
@@ -376,12 +371,10 @@ Public Class Main
             End If
         Catch ex As Exception
             MsgBox("An issue occurred during the download.  Please try again.")
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Download_P2Pool: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Download_P2Pool: Downloaded OK.")
+            _logger.Trace("Downloaded OK.")
         End Try
 
     End Sub
@@ -399,12 +392,10 @@ Public Class Main
             downloadclient.DownloadFileAsync(New Uri(link), p2poolfolder & "\interface.zip")
         Catch ex As Exception
             MsgBox("An issue occurred during the download.  Please try again.")
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Download_P2PoolInterface: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Download_P2PoolInterface: Downloaded OK.")
+            _logger.Trace("Downloaded OK.")
         End Try
 
     End Sub
@@ -430,8 +421,8 @@ Public Class Main
                     exe = settingsfolder & "\amd\ocm_sgminer.exe"
                     miner_config_file = settingsfolder & "\amd\config.bat"
                 ElseIf nvidiaminer = True Then
-                    zipPath = settingsfolder & "\nvidia\ccminer.zip"
-                    exe = settingsfolder & "\nvidia\ocm_ccminer.exe"
+                    zipPath = settingsfolder & "\nvidia\vertminer.zip"
+                    exe = settingsfolder & "\nvidia\ocm_vertminer.exe"
                     dll = settingsfolder & "\nvidia\msvcr120.dll"
                     miner_config_file = settingsfolder & "\nvidia\config.bat"
                 ElseIf cpuminer = True Then
@@ -526,12 +517,10 @@ Public Class Main
             End If
         Catch ex As Exception
             MsgBox("An issue occurred during the download.  Please try again.")
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() MinerDownloadCompleted: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() MinerDownloadCompleted: OK.")
+            _logger.Trace("MinerDownloadCompleted: OK.")
         End Try
 
     End Sub
@@ -580,12 +569,10 @@ Public Class Main
             End If
         Catch ex As Exception
             MsgBox("An issue occurred during the download.  Please try again.")
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() P2PoolDownloadCompleted: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() P2PoolDownloadCompleted: OK.")
+            _logger.Trace("P2PoolDownloadCompleted: OK.")
         End Try
 
     End Sub
@@ -611,12 +598,10 @@ Public Class Main
             p2pool_version = System.Convert.ToString(newestversion)
         Catch ex As Exception
             MsgBox("An issue occurred during the download.  Please try again.")
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() P2PoolInterfaceDownloadCompleted: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() P2PoolInterfaceDownloadCompleted: OK.")
+            _logger.Trace("P2PoolInterfaceDownloadCompleted: OK.")
         End Try
 
     End Sub
@@ -701,16 +686,16 @@ Public Class Main
         If api_connected = True Then
             If miner_hashrate < 1000 Then
                 miner_hashrate = Math.Round(miner_hashrate, 2)
-                TextBox3.Text = miner_hashrate.ToString(CultureInfo.CreateSpecificCulture("en-US")) & " kh/s"
+                TextBox3.Text = miner_hashrate.ToString & " kh/s"
             ElseIf miner_hashrate >= 1000 And miner_hashrate < 1000000 Then
                 miner_hashrate = Math.Round((miner_hashrate / 1000), 2)
-                TextBox3.Text = miner_hashrate.ToString(CultureInfo.CreateSpecificCulture("en-US")) & " Mh/s"
+                TextBox3.Text = miner_hashrate.ToString & " Mh/s"
             ElseIf miner_hashrate >= 1000000 And miner_hashrate < 1000000000 Then
                 miner_hashrate = Math.Round((miner_hashrate / 1000000), 2)
-                TextBox3.Text = miner_hashrate.ToString(CultureInfo.CreateSpecificCulture("en-US")) & " Gh/s"
+                TextBox3.Text = miner_hashrate.ToString & " Gh/s"
             ElseIf miner_hashrate >= 1000000000 And miner_hashrate < 1000000000000 Then
                 miner_hashrate = Math.Round((miner_hashrate / 1000000000), 2)
-                TextBox3.Text = miner_hashrate.ToString(CultureInfo.CreateSpecificCulture("en-US")) & " Th/s"
+                TextBox3.Text = miner_hashrate.ToString & " Th/s"
             End If
         Else
             TextBox3.Text = "0 kh/s"
@@ -760,7 +745,7 @@ Public Class Main
 
         If count > 0 Then
             For x As Integer = 0 To count - 1
-                Dim row As String() = New String() {False, pools(x), workers(x), passwords(x)}
+                Dim row As String() = New String() {selected(x), pools(x), workers(x), passwords(x)}
                 DataGridView1.Rows.Add(row)
             Next
         End If
@@ -1004,12 +989,10 @@ Public Class Main
             'File.WriteAllText(settingsfile, jsonFormatted)
             System.IO.File.Delete(settingsfolder & "\settings.ini")
         Catch ex As IOException
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() UpdateSettings: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() UpdateSettings: OK.")
+            _logger.Trace("UpdateSettings: OK.")
         End Try
 
     End Sub
@@ -1046,6 +1029,7 @@ Public Class Main
             pools.Clear()
             workers.Clear()
             passwords.Clear()
+            selected.Clear()
             Dim count = settingsJSON.pools.Count
             If Not count = 0 Then
                 For x = 0 To count - 1
@@ -1055,16 +1039,15 @@ Public Class Main
                         pools.Add(poolJSON.url)
                         workers.Add(poolJSON.user)
                         passwords.Add(poolJSON.pass)
+                        selected.Add(poolJSON.checked)
                     End If
                 Next
             End If
             Invoke(New MethodInvoker(AddressOf Update_Pool_Info))
         Catch ex As IOException
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() LoadSettings: " & ex.Message)
+            _logger.LogError(ex)
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() LoadSettings: OK.")
+            _logger.Trace("LoadSettings: OK.")
         End Try
 
     End Sub
@@ -1075,12 +1058,18 @@ Public Class Main
             pools.Clear()
             workers.Clear()
             passwords.Clear()
+            selected.Clear()
             For Each row As DataGridViewRow In DataGridView1.Rows
                 Dim chk As DataGridViewCheckBoxCell = row.Cells(DataGridView1.Columns(0).Name)
                 If chk.Value IsNot Nothing Then
                     pools.Add(DataGridView1.Rows(chk.RowIndex).Cells(1).Value)
                     workers.Add(DataGridView1.Rows(chk.RowIndex).Cells(2).Value)
                     passwords.Add(DataGridView1.Rows(chk.RowIndex).Cells(3).Value)
+                    If chk.Value = False Then
+                        selected.Add(False)
+                    Else
+                        selected.Add(True)
+                    End If
                 End If
             Next
             Dim newjson As Settings_JSON = New Settings_JSON()
@@ -1122,6 +1111,7 @@ Public Class Main
                         pooljson.url = pools(x)
                         pooljson.user = workers(x)
                         pooljson.pass = passwords(x)
+                        pooljson.checked = selected(x)
                         newjson.pools.Add(pooljson)
                     End If
                 Next
@@ -1130,11 +1120,9 @@ Public Class Main
             Dim jsonFormatted As String = JValue.Parse(jsonstring).ToString(Formatting.Indented)
             File.WriteAllText(settingsfile, jsonFormatted)
         Catch ex As IOException
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() SaveSettings: " & ex.Message)
+            _logger.LogError(ex)
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() SaveSettings: OK.")
+            _logger.Trace("SaveSettings: OK.")
         End Try
 
     End Sub
@@ -1153,8 +1141,9 @@ Public Class Main
         Dim pool_list = String.Join(",", pools.ToArray())
         If CheckBox1.Checked = True Then
             If Not pool_list.Contains("stratum+tcp://localhost:" & mining_port) Then
-                AddPool.Show()
-                AddPool.Pool_Address.Text = "stratum+tcp://localhost:" & mining_port
+                dim dialog = new AddPool(_logger)
+                dialog.Show()
+                dialog.Pool_Address.Text = "stratum+tcp://localhost:" & mining_port
             End If
         End If
         'See if P2Pool has already been downloaded/installed
@@ -1192,7 +1181,8 @@ Public Class Main
 
     Private Sub EditToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles EditToolStripMenuItem.Click
 
-        settings.Show()
+        dim dialog = New settings(_logger)
+        dialog.Show()
 
     End Sub
 
@@ -1235,12 +1225,10 @@ Public Class Main
             End If
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Update_P2Pool_Config: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Update_P2Pool_Config: OK.")
+            _logger.Trace("Update_P2Pool_Config: OK.")
         End Try
 
     End Sub
@@ -1256,7 +1244,7 @@ Public Class Main
             Dim jsonstring As String
             For Each row As DataGridViewRow In DataGridView1.Rows
                 Dim chk As DataGridViewCheckBoxCell = row.Cells(DataGridView1.Columns(0).Name)
-                If chk.Value IsNot Nothing Then 'add AndAlso chk.Value = True to only add pools that are checked
+                If chk.Value IsNot Nothing AndAlso chk.Value = True Then 'add AndAlso chk.Value = True to only add pools that are checked
                     pools.Add(DataGridView1.Rows(chk.RowIndex).Cells(1).Value)
                     workers.Add(DataGridView1.Rows(chk.RowIndex).Cells(2).Value)
                     passwords.Add(DataGridView1.Rows(chk.RowIndex).Cells(3).Value)
@@ -1272,13 +1260,19 @@ Public Class Main
             If amdminer = True Then
                 newjson = New AMD_Miner_Settings_JSON()
                 minersettingsfile = amdfolder & "\sgminer.conf"
-                For x As Integer = 0 To count - 1
-                    Dim pooljson As Pools_JSON = New Pools_JSON()
-                    pooljson.url = pools(x)
-                    pooljson.user = workers(x)
-                    pooljson.pass = passwords(x)
+                'For x As Integer = count - 1 To 0 Step -1
+                Dim pooljson As AMD_Pools_JSON = New AMD_Pools_JSON()
+                'pooljson.url = pools(x)
+                'pooljson.user = workers(x)
+                'pooljson.pass = passwords(x)
+                'Until amd support is ready in vertminer, sgminer will not allow failover pool support. Use first selected pool.
+                If count > 0 Then
+                        pooljson.url = pools(0)
+                        pooljson.user = workers(0)
+                        pooljson.pass = passwords(0)
+                    End If
                     newjson.pools.Add(pooljson)
-                Next
+                'Next
                 newjson.algorithm = "Lyra2REv2"
                 newjson.intensity = mining_intensity
                 newjson.device = devices
@@ -1286,12 +1280,12 @@ Public Class Main
                 jsonstring = jsonstring.Insert(jsonstring.Length - 1, ",""no-extranonce""" & ": " & "true")
             ElseIf nvidiaminer = True Then
                 newjson = New NVIDIA_Miner_Settings_JSON()
-                minersettingsfile = nvidiafolder & "\ccminer.conf"
+                minersettingsfile = nvidiafolder & "\vertminer.conf"
                 newjson.algo = "lyra2v2"
                 newjson.intensity = mining_intensity
                 newjson.devices = devices
-                For x As Integer = 0 To count - 1
-                    Dim pooljson As Pools_JSON = New Pools_JSON()
+                For x As Integer = count - 1 To 0 Step -1
+                    Dim pooljson As NVIDIA_Pools_JSON = New NVIDIA_Pools_JSON()
                     pooljson.url = pools(x)
                     pooljson.user = workers(x)
                     pooljson.pass = passwords(x)
@@ -1301,6 +1295,7 @@ Public Class Main
             ElseIf cpuminer = True Then
                 newjson = New CPU_Miner_Settings_JSON()
                 minersettingsfile = cpufolder & "\cpuminer-conf.json"
+                'No failover pool support in cpuminer. Use first selected pool.
                 If count > 0 Then
                     newjson.url = pools(0)
                     newjson.user = workers(0)
@@ -1312,68 +1307,12 @@ Public Class Main
             End If
             Dim jsonFormatted As String = JValue.Parse(jsonstring).ToString(Formatting.Indented)
             File.WriteAllText(minersettingsfile, jsonFormatted)
-
-            'Command Line Configuration
-            'pools.Clear()
-            'Dim poolcommand As String = ""
-            ''Clean up pool URL's
-            'For Each line As String In Pool_Address_Text.Lines
-            '    If Not line.Contains("http://") And Not line.Contains("stratum+tcp://") Then
-            '        line = "stratum+tcp://" & line
-            '    Else
-            '        line = line.Replace("http://", "stratum+tcp://")
-            '    End If
-            '    pools.Add(line)
-            '    poolcommand = poolcommand & "-o " & line.Replace(vbCr, "").Replace(vbLf, "").Trim & " "
-            'Next
-            'If Not Worker_Address_Text.Text = "" Then
-            '    worker = Worker_Address_Text.Text
-            'Else
-            '    MsgBox("No valid address detected, using default address to developer fund.")
-            '    worker = "VpBsRnN749jYHE9hT8dZreznHfmFMdE1yG"
-            'End If
-            'If Not Password_Text.Text = "" Then
-            '    password = Password_Text.Text
-            'Else
-            '    password = "x"
-            'End If
-            'Dim Intensity_Buffer As String = ""
-            'If Not mining_intensity = Nothing And Not mining_intensity = 0 Then
-            '    If amdminer = True Then
-            '        Intensity_Buffer = " -I " & mining_intensity & " "
-            '    ElseIf nvidiaminer = True Then
-            '        Intensity_Buffer = " -i " & mining_intensity & " "
-            '    End If
-            'ElseIf mining_intensity = 0 Then
-            '    Intensity_Buffer = " "
-            'End If
-            'If Not additional_miner_config = "" Then
-            '    If Not additional_miner_config(additional_miner_config.Length - 1) = " " Then
-            '        additional_miner_config = additional_miner_config & " "
-            '    End If
-            'End If
-            'If amdminer = True Then
-            '    miner_config_file = settingsfolder & "\amd\config.bat"
-            '    miner_config = "setx GPU_MAX_HEAP_SIZE 100" & Environment.NewLine & "setx GPU_USE_SYNC_OBJECTS 1" & Environment.NewLine & "setx GPU_MAX_ALLOC_PERCENT 100" & Environment.NewLine & "setx GPU_SINGLE_ALLOC_PERCENT 100" & Environment.NewLine & "del *.bin" & Environment.NewLine & "ocm_sgminer.exe --kernel Lyra2REv2 --no-extranonce " & "-u " & worker & " -p " & password & Intensity_Buffer & additional_miner_config & pool & Environment.NewLine & "exit /B"
-            'ElseIf nvidiaminer = True Then
-            '    miner_config_file = settingsfolder & "\nvidia\config.bat"
-            '    miner_config = "ocm_ccminer.exe -a lyra2v2 " & "-u " & worker & " -p " & password & Intensity_Buffer & additional_miner_config & poolcommand & Environment.NewLine & "exit /B"
-            'ElseIf cpuminer = True Then
-            '    miner_config_file = settingsfolder & "\cpu\config.bat"
-            '    miner_config = "ocm_cpuminer.exe -a lyra2rev2 " & "-u " & worker & " -p " & password & " " & additional_miner_config & poolcommand & Environment.NewLine & "exit /B"
-            'End If
-            ''Update miner config
-            'Dim objWriter As New System.IO.StreamWriter(miner_config_file)
-            'objWriter.WriteLine(miner_config)
-            'objWriter.Close()
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Update_Miner_Config: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Update_Miner_Config: OK.")
+            _logger.Trace("Update_Miner_Config: OK.")
         End Try
 
     End Sub
@@ -1402,8 +1341,8 @@ Public Class Main
                     psi = New ProcessStartInfo("cmd")
                     psi.Arguments = ("/K cd /d" & amdfolder & " & " & "setx GPU_MAX_ALLOC_PERCENT 100" & " & " & "setx GPU_SINGLE_ALLOC_PERCENT 100" & " & " & "ocm_sgminer.exe --api-listen --config " & "sgminer.conf" & " & " & " exit /B")
                 ElseIf nvidiaminer = True Then
-                    'miner_config = nvidiafolder & "\ocm_ccminer.exe"
-                    psi = New ProcessStartInfo(nvidiafolder & "\ocm_ccminer.exe")
+                    'miner_config = nvidiafolder & "\ocm_vertminer.exe"
+                    psi = New ProcessStartInfo(nvidiafolder & "\ocm_vertminer.exe")
                 ElseIf cpuminer = True Then
                     'miner_config = cpufolder & "\ocm_cpuminer.exe"
                     psi = New ProcessStartInfo(cpufolder & "\ocm_cpuminer.exe")
@@ -1418,42 +1357,11 @@ Public Class Main
                     psi.UseShellExecute = False
                 End If
                 Process.Start(psi)
-
-                'Command Line Configuration
-                'mining_running = True
-                'command = File.ReadAllText(miner_config)
-                'command = command.Replace(Environment.NewLine, " & ")
-                'Dim psi As New ProcessStartInfo("cmd")
-                'psi.CreateNoWindow = True
-                'psi.UseShellExecute = False
-                'If amdminer = True Then
-                '    psi.Arguments = ("/K cd /d" & amdfolder & " & " & command)
-                '    PictureBox2.Image = VertcoinOneClickMiner.My.Resources.Resources.on_small
-                '    Button2.Text = "Disable"
-                'ElseIf nvidiaminer = True Then
-                '    psi.Arguments = ("/K cd /d" & nvidiafolder & " & " & command)
-                '    PictureBox5.Image = VertcoinOneClickMiner.My.Resources.Resources.on_small
-                '    Button4.Text = "Disable"
-                'ElseIf cpuminer = True Then
-                '    psi.Arguments = ("/K cd /d" & cpufolder & " & " & command)
-                '    PictureBox7.Image = VertcoinOneClickMiner.My.Resources.Resources.on_small
-                '    Button5.Text = "Disable"
-                'End If
-                'Process.Start(psi)
-                ''TextBox2.Text = "Online"
-                'Pool_Address_Text.Enabled = False
-                'Worker_Address_Text.Enabled = False
-                'Worker_Address_Text.Enabled = False
-                'Password_Text.Enabled = False
-                ''Intensity_Text.Enabled = False
-                ''Additional_Configuration_Text.Enabled = False
             End If
         Catch ex As Exception
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Start_Miner: " & ex.Message)
+            _logger.LogError(ex)
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Start_Miner: OK.")
+            _logger.Trace("Start_Miner: OK.")
         End Try
 
     End Sub
@@ -1477,18 +1385,16 @@ Public Class Main
         Try
             mining_running = False
             For Each p As Process In System.Diagnostics.Process.GetProcesses
-                If p.ProcessName.Contains("ocm_ccminer") Or p.ProcessName.Contains("ocm_sgminer") Or p.ProcessName.Contains("ocm_cpuminer") Then
+                If p.ProcessName.Contains("ocm_vertminer") Or p.ProcessName.Contains("ocm_sgminer") Or p.ProcessName.Contains("ocm_cpuminer") Then
                     p.Kill()
                 End If
             Next
             miner_hashrate = 0
         Catch ex As Exception
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Kill_Miner: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Kill_Miner: OK.")
+            _logger.Trace("Kill_Miner: OK.")
         End Try
 
     End Sub
@@ -1520,12 +1426,10 @@ Public Class Main
                 Process.Start(psi)
             End If
         Catch ex As Exception
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Start_P2Pool: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Start_P2Pool: OK.")
+            _logger.Trace("Start_P2Pool: OK.")
         End Try
 
     End Sub
@@ -1540,12 +1444,10 @@ Public Class Main
                 End If
             Next
         Catch ex As Exception
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Kill_P2Pool: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Kill_P2Pool: OK.")
+            _logger.Trace("Kill_P2Pool: OK.")
         End Try
 
     End Sub
@@ -1584,7 +1486,7 @@ Public Class Main
         If connection = True Then
             Dim tempnewestversion As New Version
             Dim templink As String = ""
-            Dim request As System.Net.HttpWebRequest = System.Net.HttpWebRequest.Create("http://alwayshashing.com/ocm_versions.txt")
+            Dim request As System.Net.HttpWebRequest = System.Net.HttpWebRequest.Create("http://alwayshashing.com/ocm_update.txt")
             Dim response As System.Net.HttpWebResponse = request.GetResponse()
             Dim sr As System.IO.StreamReader = New System.IO.StreamReader(response.GetResponseStream())
             'Compares current One-Click Miner version with the latest available.
@@ -1608,7 +1510,7 @@ Public Class Main
             'Compares the current version of the Nvidia miner with the latest available.
             tempnewestversion = System.Version.Parse(sr.ReadLine.Replace("nvidia=", ""))
             templink = sr.ReadLine
-            If (tempnewestversion > System.Version.Parse(nvidia_version)) And Not (System.Version.Parse(nvidia_version) = System.Version.Parse("0.0.0.0")) And (System.IO.File.Exists(nvidiafolder & "\ocm_ccminer.exe") = True) Then
+            If (tempnewestversion > System.Version.Parse(nvidia_version)) And Not (System.Version.Parse(nvidia_version) = System.Version.Parse("0.0.0.0")) And (System.IO.File.Exists(nvidiafolder & "\ocm_vertminer.exe") = True) Then
                 update_needed = True
             End If
             'Compares the current version of the CPU miner with the latest available.
@@ -1642,6 +1544,8 @@ Public Class Main
 
         Try
             'Miner API
+            System.Threading.Thread.CurrentThread.CurrentCulture = New CultureInfo("en-US")
+            System.Threading.Thread.CurrentThread.CurrentUICulture = System.Threading.Thread.CurrentThread.CurrentCulture
             If amd_detected = True Or nvidia_detected = True Or cpu_detected = True Then
                 Dim tcpClient As New System.Net.Sockets.TcpClient()
                 If amd_detected = True Then
@@ -1715,7 +1619,7 @@ Public Class Main
             If default_miner = "amd" Then
                 miner_config_file = settingsfolder & "\amd\sgminer.conf"
             ElseIf default_miner = "nvidia" Then
-                miner_config_file = settingsfolder & "\nvidia\ccminer.conf"
+                miner_config_file = settingsfolder & "\nvidia\vertminer.conf"
             ElseIf default_miner = "cpu" Then
                 miner_config_file = settingsfolder & "\cpu\cpuminer-conf.json"
             End If
@@ -1726,12 +1630,10 @@ Public Class Main
             End If
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "MinerConfigToolStripMenuItem(), Load Miner Config: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "MinerConfigToolStripMenuItem(), Load Miner Config: OK")
+            _logger.Trace("MinerConfigToolStripMenuItem(), Load Miner Config: OK")
         End Try
 
     End Sub
@@ -1742,12 +1644,10 @@ Public Class Main
             Process.Start("notepad.exe", syslog)
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "SystemLogToolStripMenuItem(), Load Miner Log: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "SystemLogToolStripMenuItem(), Load Miner Log: OK")
+            _logger.Trace("SystemLogToolStripMenuItem(), Load Miner Log: OK")
         End Try
 
     End Sub
@@ -1763,19 +1663,18 @@ Public Class Main
             End If
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "P2PoolConfigToolStripMenuItem(), Load P2Pool Config: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "P2PoolConfigToolStripMenuItem(), Load P2Pool Config: OK")
+            _logger.Trace("P2PoolConfigToolStripMenuItem(), Load P2Pool Config: OK")
         End Try
 
     End Sub
 
     Private Sub AboutToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles AboutToolStripMenuItem.Click
 
-        about.Show()
+        dim dialog = new about(_logger)
+        dialog.Show()
 
     End Sub
 
@@ -1786,12 +1685,10 @@ Public Class Main
             Process.Start(url)
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Contact(), " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Contact(), Load Browser: OK")
+            _logger.Trace("Contact(), Load Browser: OK")
         End Try
 
     End Sub
@@ -2004,12 +1901,10 @@ Public Class Main
             End If
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Check_RPC_Settings: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Check_RPC_Settings: OK.")
+            _logger.Trace("Main() Check_RPC_Settings: OK.")
         End Try
 
     End Sub
@@ -2035,12 +1930,10 @@ Public Class Main
             End If
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Generate_RPC_Settings: " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "Main() Generate_RPC_Settings: OK.")
+            _logger.Trace("Generate_RPC_Settings: OK.")
         End Try
 
     End Sub
@@ -2075,7 +1968,7 @@ Public Class Main
         End Try
         If connection = True Then
             update_needed = False
-            Dim request As System.Net.HttpWebRequest = System.Net.HttpWebRequest.Create("http://alwayshashing.com/ocm_versions.txt")
+            Dim request As System.Net.HttpWebRequest = System.Net.HttpWebRequest.Create("http://alwayshashing.com/ocm_update.txt")
             Dim response As System.Net.HttpWebResponse = request.GetResponse()
             Dim sr As System.IO.StreamReader = New System.IO.StreamReader(response.GetResponseStream())
             'Compares current One-Click Miner version with the latest available.
@@ -2267,19 +2160,18 @@ Public Class Main
             Process.Start(url)
         Catch ex As Exception
             MsgBox(ex.Message)
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "LoadP2PoolInterface(), " & ex.Message)
+            _logger.LogError(ex)
             Invoke(New MethodInvoker(AddressOf SaveSettingsJSON))
         Finally
-            newlog = newlog & Environment.NewLine
-            newlog = newlog & ("- " & timenow & ", " & "LoadP2PoolInterface(), Load Browser: OK")
+            _logger.Trace("LoadP2PoolInterface(), Load Browser: OK")
         End Try
 
     End Sub
 
     Private Sub Button1_Click(sender As Object, e As EventArgs) Handles Button1.Click
 
-        P2Pool.Show()
+        dim dialog = new P2Pool(_logger)
+        dialog.Show()
 
     End Sub
 
@@ -2343,7 +2235,7 @@ Public Class Main
         Dim checkcount = 0
         For Each row As DataGridViewRow In DataGridView1.Rows
             Dim chk As DataGridViewCheckBoxCell = row.Cells(DataGridView1.Columns(0).Name)
-            If chk.Value IsNot Nothing Then
+            If chk.Value = True Then
                 checkcount += 1
             End If
         Next
@@ -2381,7 +2273,7 @@ Public Class Main
                     'Checks if NVIDIA miner has already been downloaded and installed
                     If System.IO.Directory.Exists(nvidiafolder) = True Then
                         For Each file As String In Directory.GetFiles(nvidiafolder)
-                            If file.Contains("ocm_ccminer.exe") And Not (System.Version.Parse(nvidia_version) = System.Version.Parse("0.0.0.0")) Then
+                            If file.Contains("ocm_vertminer.exe") And Not (System.Version.Parse(nvidia_version) = System.Version.Parse("0.0.0.0")) Then
                                 mining_installed = True
                                 Exit For
                             Else
@@ -2430,7 +2322,7 @@ Public Class Main
                 End If
                 mining_installed = False
             Else
-                MsgBox("Please select an entered pool before starting miner.")
+                MsgBox("Please select at least one pool before starting miner.")
             End If
         ElseIf Button3.Text = "Stop" Then
             Button3.Text = "Start"
@@ -2470,11 +2362,32 @@ Public Class Main
 
     Private Sub Button2_Click(sender As Object, e As EventArgs) Handles Button2.Click
 
-        AddPool.Show()
+        dim dialog = New AddPool(_logger)
+        dialog.Show()
 
     End Sub
 
     Private Sub MinerWindowToolStripMenuItem_Click(sender As Object, e As EventArgs)
+
+    End Sub
+
+    Private Sub CheckBox2_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox2.CheckedChanged
+
+        If CheckBox2.Checked = True Then
+            For Each row As DataGridViewRow In DataGridView1.Rows
+                Dim chk As DataGridViewCheckBoxCell = row.Cells(DataGridView1.Columns(0).Name)
+                If chk.Value = False Then
+                    chk.Value = True
+                End If
+            Next
+        Else
+            For Each row As DataGridViewRow In DataGridView1.Rows
+                Dim chk As DataGridViewCheckBoxCell = row.Cells(DataGridView1.Columns(0).Name)
+                If chk.Value = True Then
+                    chk.Value = False
+                End If
+            Next
+        End If
 
     End Sub
 
@@ -2485,6 +2398,3 @@ Public Class Main
     End Sub
 
 End Class
-
-
-
